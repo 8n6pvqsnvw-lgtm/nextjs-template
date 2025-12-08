@@ -1,18 +1,16 @@
 import {
   setDebug,
-  mountBackButton,
-  restoreInitData,
+  backButton,
+  initData,
   init as initSDK,
-  mountMiniAppSync,
-  bindThemeParamsCssVars,
-  mountViewport,
-  bindViewportCssVars,
+  miniApp,
+  viewport,
   mockTelegramEnv,
   type ThemeParams,
-  themeParamsState,
+  themeParams,
   retrieveLaunchParams,
   emitEvent,
-} from '@telegram-apps/sdk-react';
+} from '@tma.js/sdk-react';
 
 /**
  * Initializes the application and configures its dependencies.
@@ -22,7 +20,7 @@ export async function init(options: {
   eruda: boolean;
   mockForMacOS: boolean;
 }): Promise<void> {
-  // Set @telegram-apps/sdk-react debug mode and initialize it.
+  // Set @tma.js/sdk-react debug mode and initialize it.
   setDebug(options.debug);
   initSDK();
 
@@ -40,18 +38,20 @@ export async function init(options: {
     let firstThemeSent = false;
     mockTelegramEnv({
       onEvent(event, next) {
-        if (event[0] === 'web_app_request_theme') {
-          let tp: ThemeParams = {};
+        if (event.name === 'web_app_request_theme') {
+          let tp: Partial<ThemeParams> = {};
           if (firstThemeSent) {
-            tp = themeParamsState();
+            const state = themeParams.state;
+            tp = state as Partial<ThemeParams>;
           } else {
             firstThemeSent = true;
-            tp ||= retrieveLaunchParams().tgWebAppThemeParams;
+            const lp = retrieveLaunchParams();
+            tp = (lp.tgWebAppThemeParams || {}) as Partial<ThemeParams>;
           }
-          return emitEvent('theme_changed', { theme_params: tp });
+          return emitEvent('theme_changed', { theme_params: tp as any });
         }
 
-        if (event[0] === 'web_app_request_safe_area') {
+        if (event.name === 'web_app_request_safe_area') {
           return emitEvent('safe_area_changed', {
             left: 0,
             top: 0,
@@ -66,17 +66,21 @@ export async function init(options: {
   }
 
   // Mount all components used in the project.
-  mountBackButton.ifAvailable();
-  restoreInitData();
+  backButton.mount();
+  initData.restore();
 
-  if (mountMiniAppSync.isAvailable()) {
-    mountMiniAppSync();
-    bindThemeParamsCssVars();
+  try {
+    miniApp.mount();
+    themeParams.bindCssVars();
+  } catch (e) {
+    // miniApp not available
   }
 
-  if (mountViewport.isAvailable()) {
-    mountViewport().then(() => {
-      bindViewportCssVars();
+  try {
+    viewport.mount().then(() => {
+      viewport.bindCssVars();
     });
+  } catch (e) {
+    // viewport not available
   }
 }
